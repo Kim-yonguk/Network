@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+    </style>
+    <script src="jquery-3.1.0.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        $(document).ready(function () { //// 전형적인 제이쿼리 문법에 따라 준비가 되어있느냐??
+            // 변수를 선언합니다.
+            var color = 'black'; //// 펜의 색이 검정
+            var width = 1; //// 펜의 초기 굵기
+            var isDown = false; //// 마우스 버튼이 눌러있느냐 아니냐. 즉, 눌려있으면 그린다.
+            var newPoint, oldPoint; //// 천분의 일초마다 체크 하므로 곡선 처럼 보인다.
+            // 소켓을 연결합니다.
+            var socket = io.connect(); //// 내부 소켓 변수
+            // 캔버스를 추출합니다.
+            var canvas = document.getElementById('canvas'); //// 캔버스
+            var context = canvas.getContext('2d'); //// 이차원의 속성
+            // 마우스 이벤트를 연결합니다.
+            $(canvas).mousedown(function (event) { //// 오로지 캔버스 안에서 일어나는 이벤트. 즉, 왼쪽 마우스가 캔버스안에서 눌렸을 때하는 이벤트 처리.
+                isDown = true; //// 마우스가 눌렸다.
+                oldPoint = { ///// 올드 포인트에 포지션을 기록.
+                    x: event.pageX - $(this).position().left,
+                    y: event.pageY - $(this).position().top
+                };
+            });
+            $(canvas).mousemove(function (event) {
+                if (!isDown) { return; }
+                newPoint = {
+                    x: event.pageX - $(this).position().left,
+                    y: event.pageY - $(this).position().top
+                };
+                socket.emit('line', {
+                    x1: oldPoint.x,
+                    y1: oldPoint.y,
+                    x2: newPoint.x,
+                    y2: newPoint.y,
+                    color: color,
+                    width: width
+                });
+                oldPoint = newPoint;
+            });
+            $(canvas).mouseup(function (event) {
+                isDown = false;
+                oldPoint = {
+                    x: event.pageX - $(this).position().left,
+                    y: event.pageY - $(this).position().top
+                };
+            });
+            // 입력 양식 이벤트를 연결합니다.
+            $('#pen').click(function () {
+              width = 1;
+              color = 'black';
+              $('#width').val(width);
+          });
+          $('#redpen').click(function () {
+              width = 1;
+              color = 'red';
+              $('#width').val(width);
+          });
+          $('#greenpen').click(function () {
+              width = 1;
+              color = 'green';
+              $('#width').val(width);
+          });
+          $('#bluepen').click(function () {
+              width = 1;
+              color = 'blue';
+              $('#width').val(width);
+          });
+          $('#orangepen').click(function () {
+              width = 1;
+              color = 'orange';
+              $('#width').val(width);
+          });
+          $('#clear').click(function () {
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          // 컨텍스트 리셋
+          context.beginPath();
+        });
+            $('#eraser').click(function () {
+                width = 10;
+                color = 'white';
+                $('#width').val(width);
+            });
+            $('#width').change(function () {
+                width = $(this).val()
+            });
+            // 소켓 이벤트를 연결합니다.
+            socket.on('line', function (data) {
+                context.beginPath();
+                                context.lineWidth = data.width;
+                context.strokeStyle = data.color;
+                context.moveTo(data.x1, data.y1);
+                context.lineTo(data.x2, data.y2);
+                context.stroke();
+            });
+        });
+    </script>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+
+    <script>
+        var socket = io.connect();
+        var userList=[];
+        var a='guest';
+
+
+
+        //a=prompt("What's your nickname?");
+        //userList.push(a);
+        // 서버에 접속할 때, 사용자명을 확인한다.
+        socket.on('connect', function(){
+            // 서버에 있는 adduser 함수를 호출하며, 하나의 파라미터(prompt의 반환 값)를 전달한다
+            // socket.emit('adduser', prompt("What's your name?"));
+            socket.emit('adduser', a);
+
+        });
+
+        // 리스너: 서버에서 updatechat을 전송할 때마다, 인자 함수가 실행하여 채팅 내용을 업데이트한다
+        socket.on('updatechat', function (username, data) {
+            $('#conversation').append('<b>'+username + ':</b> ' + data + '<br>');
+
+        });
+
+        // listener, whenever the server emits 'updaterooms', this updates the room the client is in
+        // 리스너: 서버에서 updaterooms를 전송할 때마다, 인자 함수가 실행하여 클라이언트가 접속한 룸을 업데이트한다.
+        socket.on('updaterooms', function(rooms, current_room) {
+            $('#rooms').empty();
+            $.each(rooms, function(key, value) {
+                if(value == current_room){
+                    $('#rooms').append('<div>' + value + '</div>');
+                }
+                else {
+                    $('#rooms').append('<div><a href="#" onclick="switchRoom(\''+value+'\')">' + value + '</a></div>');
+                }
+
+            });
+        });
+
+        function switchRoom(room){
+            socket.emit('switchRoom', room);
+            $("#conversation").empty();
+        }
+
+        // 페이지 온로드 처리
+        $(function(){
+        // 클라이언트에서 SEND 버튼을 클릭할 때
+            $('#datasend').click( function() {
+                var message = $('#data').val();
+                $('#data').val('');
+                // 서버에서 sendchat 함수를 실행하도록 알려주며, 하나의 파라미터를 전달한다
+                socket.emit('sendchat', message);
+            });
+
+            // 클라이언트에서 키보드의 엔터키를 입력할 때
+            $('#data').keypress(function(e) {
+                if(e.which == 13) {
+                    $(this).blur();
+                    // SEND 버튼의 클릭 이벤트를 실행한다
+                    $('#datasend').focus().click();
+                }
+            });
+            $('#namebtn').click( function() {
+                var b;
+                b=a;
+                a = $('#name').val();
+                $('#name').val('');
+                socket.emit('changename', a);
+                socket.emit('sendchat', b + '에서 "' + a +  '" 로 Nickname을 변경하였습니다.');
+            });
+
+            $('#clearConversation').click( function() {
+                $("#conversation").empty();
+            });
+
+
+
+        });
+    </script>
+</head>
+
+<body>
+
+<div>
+    <div style="float:left;width:100px;border: 3px solid black;height:280px; padding:10px; overflow:scroll; overflow-x:hidden; text-align:center; ">
+        <b>  ROOM</b>
+        <hr style="border: solid 3px black; width=100%">
+        <div id="rooms"></div>
+        <br/>
+
+
+
+
+    </div>
+
+
+    <div style="float:left;width: 600px;height: 300px;border: 3px solid black;">
+
+        <div style="float:left;border-bottom: 1px solid black; width:570px;height:250px;overflow:scroll;padding:10px;">
+            <div id="conversation" >
+
+            </div>
+        </div>
+
+        <div style="text-align: center;">
+            <sub>
+                <input id="data" style="width:530px" />
+                <input type="button" id="datasend" value="전송" />
+            </sub>
+        </div>
+    </div>
+</div>
+
+    <br/>
+    <br/>
+    <br/>
+    <br/>
+    <br/>
+    <br/>
+    <br/>
+    <br/>
+    <br/>
+    <br/>
+    <br/>
+    <br/>
+    <br/>
+    <br/>
+    <br/>
+
+    <input id="name" style="width:100px" />
+
+    <button id="namebtn">닉네임변경</button>
+    <button id="clearConversation">대화창초기화</button>
+    <hr />
+    <button id="pen">펜</button>
+    <button id="eraser">지우개</button>
+    <button id="clear">초기화</button>
+
+    <input type="button" value="빨간펜" id="redpen" style="background-color:red; border:1px red solid; color:#ffffff;" />
+    <!-- <button id="redpen">빨간펜</button> -->
+    <input type="button" value="초록펜" id="greenpen" style="background-color:green; border:1px green solid; color:#ffffff;" />
+    <!-- <button id="greenpen">초록펜</button> -->
+    <input type="button" value="파란펜" id="bluepen" style="background-color:blue; border:1px blue solid; color:#ffffff;" />
+    <!-- <button id="bluepen">파란펜</button> -->
+    <input type="button" value="주황펜" id="orangepen" style="background-color:orange; border:1px orange solid; color:#ffffff;" />
+    <!-- <button id="orangepen">주황펜</button> -->
+
+    <input id="width" type="range" min="1" max="10" value="1" style= "line-height: 20px; vertical-align: middle;"/>
+    <hr />
+    <canvas id="canvas" width="1200" height="300"></canvas>
+
+</body>
+</html>
